@@ -407,6 +407,12 @@ module Bosh::Bootstrap
         # each provider/profile name gets a menu choice option
         fog_config.inject({}) do |iaas_options, fog_profile|
           profile_name, profile = fog_profile
+          if profile[:vsphere_access_key_id]
+            # TODO does fog have inbuilt detection algorithm?
+            @fog_providers["vSphere (#{profile_name})"] = {
+              "provider" => "vSphere",
+            }
+          end
           if profile[:aws_access_key_id]
             # TODO does fog have inbuilt detection algorithm?
             @fog_providers["AWS (#{profile_name})"] = {
@@ -467,6 +473,9 @@ module Bosh::Bootstrap
         creds = {}
         hl.choose do |menu|
           menu.prompt = "Choose infrastructure:  "
+          menu.choice("vSphere") do
+            creds[:provider] = "vSphere"
+           end
           menu.choice("AWS") do
             creds[:provider] = "AWS"
             creds[:aws_access_key_id] = hl.ask("Access key: ")
@@ -484,7 +493,9 @@ module Bosh::Bootstrap
       end
 
       def setup_bosh_cloud_properties
-        if aws?
+        if vsphere?
+          settings[:bosh_cloud_properties] = {}          
+        elsif aws?
           settings[:bosh_cloud_properties] = {}
           settings[:bosh_cloud_properties][:aws] = {}
           props = settings[:bosh_cloud_properties][:aws]
@@ -511,7 +522,9 @@ module Bosh::Bootstrap
       end
 
       def bosh_resources_cloud_properties
-        if aws?
+        if vsphere?
+          {"instance_type" => "m1.medium"}
+        elsif aws?
           {"instance_type" => "m1.medium"}
         elsif openstack?
           # TODO: Ask for instance type
@@ -557,7 +570,8 @@ module Bosh::Bootstrap
 
       # Creates a security group.
       def create_security_group(security_group_name)
-        if aws?
+        if vsphere?
+        elsif aws?
           create_aws_security_group(security_group_name)
         elsif openstack?
           create_openstack_security_group(security_group_name)
@@ -1015,6 +1029,10 @@ module Bosh::Bootstrap
 
       def fog_config_path
         settings.fog_path
+      end
+
+      def vsphere?
+        settings.fog_credentials.provider == "vSphere"
       end
 
       def aws?
