@@ -589,7 +589,7 @@ module Bosh::Bootstrap
       # * bosh_security_group.name
       # * bosh_security_group.ports
       # * bosh_cloud_properties.vsphere.default_security_groups
-      def create_aws_security_group(security_group_name)
+      def create_vsphere_security_group(security_group_name)
         unless fog_compute.security_groups.get(security_group_name)
           sg = fog_compute.security_groups.create(:name => security_group_name, description: "microbosh")
           settings.bosh_cloud_properties["vsphere"]["default_security_groups"] = [security_group_name]
