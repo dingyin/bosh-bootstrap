@@ -494,8 +494,9 @@ module Bosh::Bootstrap
 
       def setup_bosh_cloud_properties
         if vsphere?
-          settings[:bosh_cloud_properties] = {}          
-        elsif aws?
+          settings[:bosh_cloud_properties] = {} 
+          settings[:bosh_cloud_properties][:vsphere] = {}
+       elsif aws?
           settings[:bosh_cloud_properties] = {}
           settings[:bosh_cloud_properties][:aws] = {}
           props = settings[:bosh_cloud_properties][:aws]
@@ -571,12 +572,42 @@ module Bosh::Bootstrap
       # Creates a security group.
       def create_security_group(security_group_name)
         if vsphere?
+          create_vsphere_security_group(security_group_name)
         elsif aws?
           create_aws_security_group(security_group_name)
         elsif openstack?
           create_openstack_security_group(security_group_name)
         else
           raise "implement #create_security_group for #{settings.fog_credentials.provider}"
+        end
+      end
+
+      # Creates an VSPHERE security group.
+      # Also sets up the bosh_cloud_properties for the remote server
+      #
+      # Adds settings:
+      # * bosh_security_group.name
+      # * bosh_security_group.ports
+      # * bosh_cloud_properties.vsphere.default_security_groups
+      def create_aws_security_group(security_group_name)
+        unless fog_compute.security_groups.get(security_group_name)
+          sg = fog_compute.security_groups.create(:name => security_group_name, description: "microbosh")
+          settings.bosh_cloud_properties["vsphere"]["default_security_groups"] = [security_group_name]
+          settings[:bosh_security_group] = {}
+          settings[:bosh_security_group][:name] = security_group_name
+          settings[:bosh_security_group][:ports] = {}
+          settings[:bosh_security_group][:ports][:ssh_access] = 22
+          settings[:bosh_security_group][:ports][:nats_server] = 4222
+          settings[:bosh_security_group][:ports][:message_bus] = 6868
+          settings[:bosh_security_group][:ports][:blobstore] = 25250
+          settings[:bosh_security_group][:ports][:bosh_director] = 25555
+          settings.bosh_security_group.ports.values.each do |port|
+            sg.authorize_port_range(port..port)
+            say "opened port #{port} in security group #{security_group_name}"
+          end
+          save_settings!
+        else
+          error "VSPHERE security group '#{security_group_name}' already exists. Rename BOSH or delete old security group manually and re-run CLI."
         end
       end
 
